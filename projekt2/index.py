@@ -17,16 +17,15 @@ GREY = (200, 200, 200)
 
 
 # ------------------------------------------------------
-# FUNKCJA TINTUJĄCA PNG
+# FUNKCJA TINTUJĄCA PNG (alpha 255 aby nie znikał obraz)
 # ------------------------------------------------------
 def tint_image(image, color):
     """Nakłada kolor (tint) na PNG z zachowaniem przezroczystości."""
     tinted = image.copy()
     r, g, b = color
-    # powierzchnia z pełnym alpha (255) — ważne!
     tint_surface = pygame.Surface(image.get_size(), pygame.SRCALPHA)
+    # ważne: alpha = 255, by nie "wyzerować" kanału alpha przy BLEND_RGBA_MULT
     tint_surface.fill((r, g, b, 255))
-    # mnożymy kanały RGB; alpha oryginału pozostaje poprawna
     tinted.blit(tint_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     return tinted
 
@@ -35,19 +34,22 @@ def tint_image(image, color):
 # KLASA PLAYER
 # ------------------------------------------------------
 class Player:
-    """Reprezentuje obiekt poruszany na ekranie."""
+    """Reprezentuje obiekt poruszany na ekranie (PNG z tintowaniem)."""
 
-    def __init__(self, x: float, y: float, image_path="dodo.png"):
+    def __init__(self, x: float, y: float, image_path="dodo.png", scale=None):
         self.x = float(x)
         self.y = float(y)
 
-        # oryginalny obraz
+        # wczytanie obrazu bazowego z alpha
         self.base_image = pygame.image.load(image_path).convert_alpha()
 
-        # widoczny obraz (kopiowany + tintowany)
-        self.color = (255, 255, 255)  # brak koloru = oryginał
-        self.image = self.base_image.copy()
+        # opcjonalne skalowanie
+        if scale is not None:
+            self.base_image = pygame.transform.smoothscale(self.base_image, scale)
 
+        # aktualny (tintowany) obraz
+        self.color = (255, 255, 255)
+        self.image = self.base_image.copy()
         self.rect = self.image.get_rect(center=(int(self.x), int(self.y)))
 
     @property
@@ -55,9 +57,10 @@ class Player:
         return (int(self.x), int(self.y))
 
     def set_color(self, color):
-        """Ustawia nowy kolor obiektu."""
+        """Ustaw kolor i zaktualizuj widoczny obraz."""
         self.color = color
         self.image = tint_image(self.base_image, self.color)
+        # utrzymaj środek
         self.rect = self.image.get_rect(center=self.rect.center)
 
     def set_pos(self, x: float, y: float):
@@ -71,10 +74,12 @@ class Player:
         self.rect.center = (int(self.x), int(self.y))
 
     def clamp_to_rect(self, w: int, h: int):
+        # zapobiega wychodzeniu poza okno (używa rect clamp_ip)
         self.rect.clamp_ip(pygame.Rect(0, 0, w, h))
         self.x, self.y = self.rect.center
 
     def draw(self, surface: pygame.Surface):
+        """Rysuj na podanej powierzchni."""
         surface.blit(self.image, self.rect)
 
 
@@ -119,7 +124,7 @@ class PathManager:
 class GameApp:
     def __init__(self, width=WIDTH, height=HEIGHT):
         pygame.init()
-        pygame.display.set_caption("Sterowanie PNG - kolory RGB")
+        pygame.display.set_caption("Sterowanie PNG - tło i kolory RGB")
         self.screen = pygame.display.set_mode((width, height))
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont(None, 20)
@@ -127,10 +132,20 @@ class GameApp:
         self.width = width
         self.height = height
 
-        self.player = Player(width // 2, height // 2, "dodo.png")
+        # --- wczytaj tło (tlo.jpg) i dopasuj do rozmiaru okna ---
+        try:
+            bg = pygame.image.load("tlo.jpg").convert()
+            self.background = pygame.transform.smoothscale(bg, (self.width, self.height))
+        except Exception as e:
+            print("Nie udało się wczytać 'tlo.jpg'. Używane będzie jednolite tło. Błąd:", e)
+            self.background = None
+
+        # obiekt startowy (możesz podać scale=(w,h) jeśli chcesz zmienić rozmiar)
+        self.player = Player(width // 2, height // 2, "dodo.png", scale=(64, 64))
         self.path = PathManager()
         self.path.push(self.player.pos)
 
+        # Playback
         self.playing_back = False
         self.playback_stack = []
         self.playback_delay_frames = 3
@@ -164,10 +179,14 @@ class GameApp:
         dx = dy = 0.0
 
         if not self.playing_back:
-            if keys[pygame.K_LEFT]: dx -= PLAYER_SPEED * dt
-            if keys[pygame.K_RIGHT]: dx += PLAYER_SPEED * dt
-            if keys[pygame.K_UP]: dy -= PLAYER_SPEED * dt
-            if keys[pygame.K_DOWN]: dy += PLAYER_SPEED * dt
+            if keys[pygame.K_LEFT]:
+                dx -= PLAYER_SPEED * dt
+            if keys[pygame.K_RIGHT]:
+                dx += PLAYER_SPEED * dt
+            if keys[pygame.K_UP]:
+                dy -= PLAYER_SPEED * dt
+            if keys[pygame.K_DOWN]:
+                dy += PLAYER_SPEED * dt
 
             if dx or dy:
                 self.player.move(dx, dy)
@@ -184,7 +203,7 @@ class GameApp:
                 elif event.key == pygame.K_SPACE:
                     self.start_playback()
 
-                # ZMIANA KOLORU PNG
+                # ZMIANA KOLORU PNG (poprawione tintowanie)
                 elif event.key == pygame.K_r:
                     self.player.set_color((255, 0, 0))
                 elif event.key == pygame.K_g:
@@ -227,8 +246,15 @@ class GameApp:
             self.handle_events(dt)
             self.update_playback()
 
-            self.screen.fill(WHITE)
+            # rysowanie tła (jeśli wczytane) lub jednolite
+            if self.background:
+                self.screen.blit(self.background, (0, 0))
+            else:
+                self.screen.fill(WHITE)
+
+            # rysuj trasę i gracza
             self.path.draw_path(self.screen)
+            # WAŻNE: wywołanie zgodne z sygnaturą draw(self, surface)
             self.player.draw(self.screen)
             self.draw_hud()
 
