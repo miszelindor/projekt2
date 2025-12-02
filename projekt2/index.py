@@ -40,11 +40,18 @@ GREY = (200, 200, 200)
 class Player:
     """Reprezentuje obiekt poruszany na ekranie."""
 
-    def __init__(self, x: float, y: float, color=(0, 100, 255)):
+    def __init__(self, x: float, y: float, image_path="dodo.png"):
         self.x = float(x)
         self.y = float(y)
-        self.color = color
-        self.radius = PLAYER_RADIUS
+
+        # --- wczytanie obrazka ---
+        self.image = pygame.image.load(image_path).convert_alpha()
+
+        # opcjonalne skalowanie:
+        # self.image = pygame.transform.scale(self.image, (40, 40))
+
+        # zapamiętujemy wymiar (do centrowania)
+        self.rect = self.image.get_rect(center=(int(self.x), int(self.y)))
 
     @property
     def pos(self):
@@ -53,25 +60,19 @@ class Player:
     def set_pos(self, x: float, y: float):
         self.x = float(x)
         self.y = float(y)
+        self.rect.center = (int(self.x), int(self.y))
 
     def move(self, dx: float, dy: float):
         self.x += dx
         self.y += dy
+        self.rect.center = (int(self.x), int(self.y))
 
     def clamp_to_rect(self, w: int, h: int):
-        """Zapobiega wyjściu obiektu poza okno."""
-        r = self.radius
-        if self.x < r:
-            self.x = r
-        if self.x > w - r:
-            self.x = w - r
-        if self.y < r:
-            self.y = r
-        if self.y > h - r:
-            self.y = h - r
+        self.rect.clamp_ip(pygame.Rect(0, 0, w, h))
+        self.x, self.y = self.rect.center
 
     def draw(self, surface: pygame.Surface):
-        pygame.draw.circle(surface, self.color, self.pos, self.radius)
+        surface.blit(self.image, self.rect)
 
 
 class PathManager:
@@ -130,7 +131,7 @@ class GameApp:
         self.height = height
 
         # obiekt startowy na środku
-        self.player = Player(width // 2, height // 2)
+        self.player = Player(width // 2, height // 2, "dodo.png")
         self.path = PathManager()
         # zapisujemy pozycję startową
         self.path.push(self.player.pos)
