@@ -34,8 +34,10 @@ class Player:
             self.base_image = pygame.transform.smoothscale(self.base_image, scale)
 
         self.color = (255, 255, 255)
+        self.original_color = (255, 255, 255)   # <<<<<< DODANE
         self.image = self.base_image.copy()
         self.rect = self.image.get_rect(center=(int(x), int(y)))
+
 
     @property
     def pos(self):
@@ -189,6 +191,8 @@ class GameApp:
                     self.player.set_color((0, 255, 0))
                 elif event.key == pygame.K_b:
                     self.player.set_color((0, 0, 255))
+                elif event.key == pygame.K_n:
+                    self.player.set_color(self.player.original_color)
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self.player.set_pos(*event.pos)
