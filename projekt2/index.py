@@ -231,7 +231,7 @@ class GameApp:
         ]
         y = 5
         for l in lines:
-            surf = self.font.render(l, True, BLACK)
+            surf = self.font.render(l, True, WHITE)
             self.screen.blit(surf, (5, y))
             y += 18
 
